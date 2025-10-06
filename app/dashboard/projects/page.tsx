@@ -83,26 +83,76 @@ export default function ProjectsPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user?.selectedTeam?.id) return
+    
+    // Debug logs
+    console.log('=== DEBUG CREATE PROJECT ===')
+    console.log('User:', user)
+    console.log('Selected Team:', user?.selectedTeam)
+    console.log('New Project Data:', newProject)
+    
+    if (!user?.selectedTeam?.id) {
+      console.error('No selected team ID')
+      toast({
+        title: "Erreur",
+        description: "Aucune équipe sélectionnée",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!user?.id) {
+      console.error('No user ID')
+      toast({
+        title: "Erreur",
+        description: "Utilisateur non authentifié",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsCreating(true)
     try {
+      // Ensure team exists in Supabase before creating project
+      console.log('Verifying team exists in Supabase...')
+      const { data: teamExists, error: teamError } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('id', user.selectedTeam.id)
+        .single()
+
+      if (teamError || !teamExists) {
+        console.log('Team not found in Supabase, syncing team first...')
+        
+        // Import TeamManager dynamically to avoid circular dependencies
+        const { TeamManager } = await import('@/lib/team-manager')
+        await TeamManager.ensureUserHasTeam(user)
+        
+        // Wait a bit for the team to be synced
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
       // Add smooth transition delay
       await new Promise(resolve => setTimeout(resolve, 200))
       
+      const insertData = {
+        name: newProject.name,
+        description: newProject.description,
+        start_date: newProject.start_date,
+        end_date: newProject.end_date,
+        priority: newProject.priority,
+        status: newProject.status,
+        team_id: user.selectedTeam.id,
+        created_by: user.id
+      }
+      
+      console.log('Insert data:', insertData)
+      
       const { data, error } = await supabase
         .from('projects')
-        .insert([{
-          name: newProject.name,
-          description: newProject.description,
-          start_date: newProject.start_date,
-          end_date: newProject.end_date,
-          priority: newProject.priority,
-          status: newProject.status,
-          team_id: user.selectedTeam.id,
-          created_by: user.id
-        }])
+        .insert([insertData])
         .select()
+
+      console.log('Supabase response:', { data, error })
 
       if (error) throw error
 
@@ -125,10 +175,12 @@ export default function ProjectsPage() {
       // Reload projects data
       await loadProjects()
     } catch (error) {
-      console.error('Erreur lors de la création du projet:', error)
+      // Éviter les logs complexes qui causent des erreurs Next.js
+      console.error('Erreur création projet:', error?.message || 'Erreur inconnue')
+      
       toast({
         title: "Erreur",
-        description: "Impossible de créer le projet",
+        description: error instanceof Error ? error.message : "Impossible de créer le projet",
         variant: "destructive",
       })
     } finally {

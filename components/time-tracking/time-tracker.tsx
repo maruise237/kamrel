@@ -240,6 +240,7 @@ export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
   }
 
   const formatTime = (seconds: number) => {
+    if (isNaN(seconds) || seconds < 0) seconds = 0
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const secs = seconds % 60
@@ -247,7 +248,8 @@ export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
   }
 
   const getTotalHours = () => {
-    return timeEntries.reduce((total, entry) => total + entry.hours, 0).toFixed(2)
+    const total = timeEntries.reduce((total, entry) => total + (entry.hours || 0), 0)
+    return isNaN(total) ? '0.00' : total.toFixed(2)
   }
 
   return (

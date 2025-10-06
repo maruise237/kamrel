@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useUser } from "@stackframe/stack"
+import { TeamManager } from "@/lib/team-manager"
 import { stackApp } from "@/stack/client"
 import { supabase } from "@/lib/supabase"
 import { NotificationCenter } from "@/components/notifications/notification-center"
@@ -47,9 +48,28 @@ const navigation = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [teamInitialized, setTeamInitialized] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const user = useUser()
+
+  // Initialize team for user on first load
+  useEffect(() => {
+    const initializeTeam = async () => {
+      if (user?.id && !teamInitialized) {
+        try {
+          console.log('Initializing team for user...')
+          await TeamManager.initializeUserTeams(user)
+          setTeamInitialized(true)
+          console.log('Team initialization completed')
+        } catch (error) {
+          console.error('Failed to initialize team:', error)
+        }
+      }
+    }
+
+    initializeTeam()
+  }, [user?.id, teamInitialized])
 
   const handleLogout = async () => {
     console.log("[v0] Logging out user")

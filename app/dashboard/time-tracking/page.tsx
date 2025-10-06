@@ -3,7 +3,8 @@
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { TimeTracker } from "@/components/time-tracking/time-tracker"
 import { Card } from "@/components/ui/card"
-import { Clock, TrendingUp, Calendar, Target } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Clock, TrendingUp, Calendar, Target, Plus, Briefcase } from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@stackframe/stack"
@@ -17,6 +18,8 @@ export default function TimeTrackingPage() {
   const [totalHours, setTotalHours] = useState(0)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [isStatsLoading, setIsStatsLoading] = useState(false)
+  const [isEntriesLoading, setIsEntriesLoading] = useState(false)
+  const [timeEntries, setTimeEntries] = useState([])
 
   const user = useUser()
   const { showLoader } = useGlobalLoading()

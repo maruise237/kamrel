@@ -142,6 +142,25 @@ export default function DashboardPage() {
     try {
       setIsCreating(true)
       
+      // Ensure team exists in Supabase before creating project
+      console.log('Verifying team exists in Supabase...')
+      const { data: teamExists, error: teamError } = await supabase
+        .from('teams')
+        .select('id')
+        .eq('id', user.selectedTeam.id)
+        .single()
+
+      if (teamError || !teamExists) {
+        console.log('Team not found in Supabase, syncing team first...')
+        
+        // Import TeamManager dynamically to avoid circular dependencies
+        const { TeamManager } = await import('@/lib/team-manager')
+        await TeamManager.ensureUserHasTeam(user)
+        
+        // Wait a bit for the team to be synced
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+      
       // Créer le projet dans Supabase
       const { data: project, error } = await supabase
         .from('projects')

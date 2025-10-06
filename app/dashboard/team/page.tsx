@@ -183,7 +183,7 @@ export default function TeamPage() {
           <Card className="p-6">
             <p className="text-sm font-medium text-muted-foreground">Tasks completed</p>
             <p className="text-2xl font-bold text-foreground mt-2">
-              {teamMembers.reduce((acc, m) => acc + m.tasksCompleted, 0)}
+              {teamMembers.reduce((acc, m) => acc + (m.tasksCompleted || 0), 0)}
             </p>
           </Card>
         </div>

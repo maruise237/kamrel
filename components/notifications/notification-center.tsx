@@ -76,7 +76,8 @@ export function NotificationCenter({ className }: NotificationCenterProps) {
       if (error) throw error
 
       setNotifications(data || [])
-      setUnreadCount(data?.filter(n => !n.is_read).length || 0)
+      const unreadCountValue = data?.filter(n => !n.is_read).length || 0
+      setUnreadCount(isNaN(unreadCountValue) ? 0 : unreadCountValue)
     } catch (error) {
       console.error('Erreur lors du chargement des notifications:', error)
       toast({

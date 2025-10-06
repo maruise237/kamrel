@@ -14,7 +14,7 @@ export class SupabaseManager {
       console.log('Début de la migration des données vers Supabase...')
       
       // Récupérer les données du stockage local
-      const localData = this.localStorageManager.getAllData()
+      const localData = this.localStorageManager.getData()
       
       if (!localData) {
         console.log('Aucune donnée locale à migrer')

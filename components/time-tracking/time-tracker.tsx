@@ -10,15 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { Play, Pause, Square, Clock, Plus, Edit, Trash2 } from 'lucide-react'
 import { supabase, TimeEntry, Project, Task } from '@/lib/supabase'
-import { useUser } from '@stackframe/stack'
+import { createClientComponentClient } from '@/lib/supabase-client'
 import { useToast } from '@/hooks/use-toast'
 
 interface TimeTrackerProps {
   projectId?: string
   taskId?: string
+  workspaceId?: string
 }
 
-export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
+export function TimeTracker({ projectId, taskId, workspaceId }: TimeTrackerProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [startTime, setStartTime] = useState<Date | null>(null)
@@ -28,9 +29,11 @@ export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(workspaceId || null)
 
-  const user = useUser()
   const { toast } = useToast()
+  const supabaseClient = createClientComponentClient()
 
   const [newEntry, setNewEntry] = useState({
     project_id: projectId || '',
@@ -41,21 +44,56 @@ export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
   })
 
   useEffect(() => {
-    loadTimeEntries()
-    loadProjects()
-    if (projectId) {
-      loadTasks(projectId)
-    }
-  }, [user, projectId])
+    initializeUser()
+  }, [])
 
   useEffect(() => {
-    let interval: NodeJS.Timeout
+    if (user?.id && currentWorkspaceId) {
+      loadTimeEntries()
+      loadProjects()
+      if (projectId) {
+        loadTasks(projectId)
+      }
+    }
+  }, [user, currentWorkspaceId, projectId])
+
+  const initializeUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabaseClient.auth.getUser()
+      if (!authUser) return
+
+      setUser(authUser)
+
+      if (!workspaceId) {
+        // Get user's current workspace if not provided
+        const { data: memberData } = await supabaseClient
+          .from('workspace_members')
+          .select('workspace_id')
+          .eq('user_id', authUser.id)
+          .eq('status', 'active')
+          .single()
+
+        if (memberData?.workspace_id) {
+          setCurrentWorkspaceId(memberData.workspace_id)
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing user:', error)
+    }
+  }
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
     if (isRunning && startTime) {
       interval = setInterval(() => {
         setCurrentTime(Math.floor((Date.now() - startTime.getTime()) / 1000))
       }, 1000)
     }
-    return () => clearInterval(interval)
+    return () => {
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
   }, [isRunning, startTime])
 
   const loadTimeEntries = async () => {
@@ -336,7 +374,7 @@ export function TimeTracker({ projectId, taskId }: TimeTrackerProps) {
                 Ajouter une entrée
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent key="time-tracker-dialog" className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Ajouter une entrée de temps</DialogTitle>
               </DialogHeader>

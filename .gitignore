@@ -1,64 +1,42 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
 .pnp.js
 .yarn/install-state.gz
+jspm_packages/
 
-# testing
+# Testing
 /coverage
+*.lcov
+.nyc_output
 
-# next.js
+# Next.js
 /.next/
 /out/
+next-env.d.ts
 
-# production
+# Production builds
 /build
 /dist
 
-# misc
-.DS_Store
-*.pem
-Thumbs.db
+# Environment variables (do not commit any .env files to git, except for .env.example)
+.env*
+!.env.example
 
-# debug
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
-
-# env files (do not commit any .env files to git, except for .env.example)
-.env*
-!.env.example
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# IDEs and editors
-/.vscode
-/.idea
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Logs
-logs
-*.log
 
 # Runtime data
 pids
@@ -66,21 +44,8 @@ pids
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage
-*.lcov
-
-# nyc test coverage
-.nyc_output
-
-# Dependency directories
-node_modules/
-jspm_packages/
-
 # Optional npm cache directory
 .npm
-
-# Optional eslint cache
 .eslintcache
 
 # Microbundle cache
@@ -98,20 +63,29 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# parcel-bundler cache (https://parceljs.org/)
+# Parcel-bundler cache
 .cache
 .parcel-cache
-
-# Next.js build output
-.next
-
-# Nuxt.js build / generate output
-.nuxt
-dist
 
 # Storybook build outputs
 .out
 .storybook-out
+
+# IDEs and editors
+/.vscode
+/.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Temporary folders
 tmp/
@@ -120,3 +94,10 @@ temp/
 # Supabase
 .branches
 .temp
+
+# Stack Auth
+/stack/.env*
+
+# Additional project-specific ignores
+*.pem
+.nuxt

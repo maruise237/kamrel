@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,22 +12,46 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { User, Bell, Lock, CreditCard, Globe, Upload, Camera } from "lucide-react"
-import { useUser } from "@stackframe/stack"
+import { User as SupabaseUser } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { supabase, UserPreferences, UserProfile } from "@/lib/supabase"
 import { NotificationService } from "@/lib/notifications"
 
 export default function SettingsPage() {
-  const user = useUser()
+  // Supabase Auth state
+  const [user, setUser] = useState<SupabaseUser | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
+  
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
   
+  useEffect(() => {
+    const supabaseClient = createClientComponentClient()
+    
+    // Get initial user
+    supabaseClient.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+      setUserLoading(false)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null)
+        setUserLoading(false)
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
+  
   const [profile, setProfile] = useState({
-    name: user?.displayName || "Jean Dupont",
-    email: user?.primaryEmail || "jean@exemple.com",
+    name: user?.user_metadata?.full_name || "Jean Dupont",
+    email: user?.email || "jean@exemple.com",
     company: "KamTech",
     phone: "+225 07 00 00 00",
-    avatar_url: user?.profileImageUrl || "",
+    avatar_url: user?.user_metadata?.avatar_url || "",
   })
 
   const [uploading, setUploading] = useState(false)
@@ -41,6 +65,19 @@ export default function SettingsPage() {
     teamInvitations: true,
     deadlineReminders: true
   })
+
+  // Update profile state when user changes
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.user_metadata?.full_name || "Jean Dupont",
+        email: user.email || "jean@exemple.com",
+        company: "KamTech",
+        phone: "+225 07 00 00 00",
+        avatar_url: user.user_metadata?.avatar_url || "",
+      })
+    }
+  }, [user])
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]

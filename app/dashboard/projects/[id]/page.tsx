@@ -375,7 +375,7 @@ export default function ProjectDetailPage() {
         </Card>
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent key={`project-edit-task-dialog-${editingTask?.id || 'new'}`} className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Modifier la tâche</DialogTitle>
             </DialogHeader>

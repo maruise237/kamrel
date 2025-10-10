@@ -15,9 +15,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase, Project } from "@/lib/supabase"
-import { useUser } from "@stackframe/stack"
+import { createClientComponentClient } from '@/lib/supabase-client'
 import { useToast } from "@/hooks/use-toast"
-import { ChatTrigger } from "@/components/chat/chat-component"
 import { KamrelLoader, KamrelFullScreenLoader, KamrelCardSkeleton, KamrelSkeleton } from "@/components/ui/kamrel-loader"
 import { useGlobalLoading } from "@/components/layout/global-loading-provider"
 
@@ -32,8 +31,10 @@ export default function ProjectsPage() {
   const [isProjectsLoading, setIsProjectsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
 
-  const user = useUser()
+  const supabaseClient = createClientComponentClient()
   const { toast } = useToast()
   const { showLoader } = useGlobalLoading()
 
@@ -47,23 +48,62 @@ export default function ProjectsPage() {
   })
 
   useEffect(() => {
-    if (user?.selectedTeam?.id) {
-      loadProjects()
-    }
-  }, [user])
+    const initializeUser = async () => {
+      try {
+        const { data: { user: authUser } } = await supabaseClient.auth.getUser()
+        if (!authUser) {
+          router.push('/auth/login')
+          return
+        }
 
-  const loadProjects = async () => {
-    if (!user?.selectedTeam?.id) return
+        setUser(authUser)
+
+        // Get user's current workspace
+        const { data: memberData } = await supabaseClient
+          .from('workspace_members')
+          .select('workspace_id, workspaces(id, name)')
+          .eq('user_id', authUser.id)
+          .eq('status', 'active')
+          .single()
+
+        if (memberData?.workspace_id) {
+          setWorkspaceId(memberData.workspace_id)
+          loadProjects(memberData.workspace_id)
+        } else {
+          toast({
+            title: "Aucun workspace",
+            description: "Vous n'êtes membre d'aucun workspace",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error('Error initializing user:', error)
+        toast({
+          title: "Erreur",
+          description: "Impossible d'initialiser l'utilisateur",
+          variant: "destructive",
+        })
+      } finally {
+        setIsInitialLoading(false)
+      }
+    }
+
+    initializeUser()
+  }, [])
+
+  const loadProjects = async (currentWorkspaceId?: string) => {
+    const targetWorkspaceId = currentWorkspaceId || workspaceId
+    if (!targetWorkspaceId) return
 
     setIsProjectsLoading(true)
     try {
       // Add smooth transition delay
       await new Promise(resolve => setTimeout(resolve, 300))
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('projects')
         .select('*')
-        .eq('team_id', user.selectedTeam.id)
+        .eq('workspace_id', targetWorkspaceId)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -87,19 +127,8 @@ export default function ProjectsPage() {
     // Debug logs
     console.log('=== DEBUG CREATE PROJECT ===')
     console.log('User:', user)
-    console.log('Selected Team:', user?.selectedTeam)
     console.log('New Project Data:', newProject)
     
-    if (!user?.selectedTeam?.id) {
-      console.error('No selected team ID')
-      toast({
-        title: "Erreur",
-        description: "Aucune équipe sélectionnée",
-        variant: "destructive",
-      })
-      return
-    }
-
     if (!user?.id) {
       console.error('No user ID')
       toast({
@@ -112,27 +141,31 @@ export default function ProjectsPage() {
 
     setIsCreating(true)
     try {
-      // Ensure team exists in Supabase before creating project
-      console.log('Verifying team exists in Supabase...')
-      const { data: teamExists, error: teamError } = await supabase
-        .from('teams')
-        .select('id')
-        .eq('id', user.selectedTeam.id)
-        .single()
-
-      if (teamError || !teamExists) {
-        console.log('Team not found in Supabase, syncing team first...')
+      // Get current workspace_id from user metadata or workspace_members
+      const { getCurrentWorkspaceId } = await import('@/lib/supabase')
+      let workspaceId = await getCurrentWorkspaceId()
+      
+      if (!workspaceId) {
+        // Fallback: get workspace from workspace_members table
+        const { data: memberData } = await supabase
+          .from('workspace_members')
+          .select('workspace_id')
+          .eq('user_id', user.id)
+          .single()
         
-        // Import TeamManager dynamically to avoid circular dependencies
-        const { TeamManager } = await import('@/lib/team-manager')
-        await TeamManager.ensureUserHasTeam(user)
-        
-        // Wait a bit for the team to be synced
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        workspaceId = memberData?.workspace_id
       }
       
-      // Add smooth transition delay
-      await new Promise(resolve => setTimeout(resolve, 200))
+      if (!workspaceId) {
+        toast({
+          title: "Erreur",
+          description: "Aucun workspace disponible pour créer le projet",
+          variant: "destructive",
+        })
+        return
+      }
+      
+      console.log('Using workspace_id:', workspaceId)
       
       const insertData = {
         name: newProject.name,
@@ -141,7 +174,7 @@ export default function ProjectsPage() {
         end_date: newProject.end_date,
         priority: newProject.priority,
         status: newProject.status,
-        team_id: user.selectedTeam.id,
+        workspace_id: workspaceId, // Use workspace_id instead of team_id
         created_by: user.id
       }
       
@@ -304,7 +337,7 @@ export default function ProjectsPage() {
                 Nouveau projet
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent key="create-project-dialog" className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle className="text-xl">Créer un nouveau projet</DialogTitle>
               </DialogHeader>
@@ -452,15 +485,9 @@ export default function ProjectsPage() {
                       <span className="text-white font-bold text-2xl">{project.name.charAt(0)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <ChatTrigger 
-                        type="project" 
-                        id={project.id} 
-                        name={project.name}
-                      >
-                        <Button variant="ghost" size="icon">
-                          <MessageCircle className="h-5 w-5" />
-                        </Button>
-                      </ChatTrigger>
+                      <Button variant="ghost" size="icon">
+                        <MessageCircle className="h-5 w-5" />
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
@@ -524,7 +551,7 @@ export default function ProjectsPage() {
         </div>
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent key="edit-project-dialog" className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Modifier le projet</DialogTitle>
             </DialogHeader>

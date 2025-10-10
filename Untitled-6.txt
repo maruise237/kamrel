@@ -1,0 +1,10 @@
+// ✅ CORRIGÉ : Structure HTML valide
+<p className="text-3xl font-bold text-foreground mt-2">
+  {isDataLoading ? (
+    <span className="inline-block">
+      <KamrelSkeleton className="h-8 w-12" />
+    </span>
+  ) : (
+    stats.totalProjects
+  )}
+</p>

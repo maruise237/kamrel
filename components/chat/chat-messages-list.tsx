@@ -71,15 +71,15 @@ export function ChatMessagesList({
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center gap-4"
+          className="flex flex-col items-center gap-3 sm:gap-4"
         >
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
           >
-            <Loader2 className="h-8 w-8 text-muted-foreground" />
+            <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
           </motion.div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Chargement des messages...
           </p>
         </motion.div>
@@ -93,19 +93,19 @@ export function ChatMessagesList({
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center max-w-md mx-auto p-8"
+          className="text-center max-w-md mx-auto p-4 sm:p-8"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
           >
-            <MessageCircle className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <MessageCircle className="h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground mx-auto mb-3 sm:mb-4" />
           </motion.div>
-          <h3 className="text-lg font-semibold mb-2">
+          <h3 className="text-base sm:text-lg font-semibold mb-2">
             Aucun message pour le moment
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Soyez le premier à envoyer un message dans cette conversation !
           </p>
         </motion.div>
@@ -120,19 +120,18 @@ export function ChatMessagesList({
       ref={scrollAreaRef}
       className={cn('flex-1', className)}
     >
-      <div className="p-4 space-y-4">
+      <div className="p-2 sm:p-4 space-y-2 sm:space-y-4">
         <AnimatePresence initial={false}>
-          {messageGroups.map((group, groupIndex) => (
+          {messageGroups.map((group) => (
             <motion.div
-              key={`group-${groupIndex}-${group[0].id}`}
+              key={`group-${group[0].id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ 
-                duration: 0.3,
-                delay: groupIndex * 0.05 
+                duration: 0.3
               }}
-              className="space-y-1"
+              className="space-y-0.5 sm:space-y-1"
             >
               {group.map((message, messageIndex) => (
                 <ChatMessageComponent

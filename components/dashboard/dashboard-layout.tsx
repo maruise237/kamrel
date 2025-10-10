@@ -29,11 +29,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useUser } from "@stackframe/stack"
-import { TeamManager } from "@/lib/team-manager"
-import { stackApp } from "@/stack/client"
-import { supabase } from "@/lib/supabase"
+import { User as SupabaseUser } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@/lib/supabase"
 import { NotificationCenter } from "@/components/notifications/notification-center"
+import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 
 const navigation = [
   { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
@@ -48,32 +47,33 @@ const navigation = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [teamInitialized, setTeamInitialized] = useState(false)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
   const pathname = usePathname()
   const router = useRouter()
-  const user = useUser()
+  const supabaseClient = createClientComponentClient()
 
-  // Initialize team for user on first load
   useEffect(() => {
-    const initializeTeam = async () => {
-      if (user?.id && !teamInitialized) {
-        try {
-          console.log('Initializing team for user...')
-          await TeamManager.initializeUserTeams(user)
-          setTeamInitialized(true)
-          console.log('Team initialization completed')
-        } catch (error) {
-          console.error('Failed to initialize team:', error)
-        }
-      }
+    // Get initial user
+    const getUser = async () => {
+      const { data: { user } } = await supabaseClient.auth.getUser()
+      setUser(user)
     }
+    
+    getUser()
 
-    initializeTeam()
-  }, [user?.id, teamInitialized])
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null)
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [supabaseClient])
 
   const handleLogout = async () => {
     console.log("[v0] Logging out user")
-    await stackApp.signOut()
+    await supabaseClient.auth.signOut()
     router.push("/login")
   }
 
@@ -85,13 +85,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     router.push("/dashboard/settings")
   }
 
-  const userInitials = user?.displayName
-    ? user.displayName
+  const userInitials = user?.user_metadata?.full_name
+    ? user.user_metadata.full_name
         .split(" ")
-        .map((n) => n[0])
+        .map((n: string) => n[0])
         .join("")
         .toUpperCase()
-    : "U"
+    : user?.email?.charAt(0).toUpperCase() || "U"
 
   return (
     <div className="min-h-screen bg-background">
@@ -134,6 +134,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
 
+          {/* Workspace Switcher */}
+          <div className="p-4 border-b border-border">
+            <WorkspaceSwitcher />
+          </div>
+
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
@@ -163,12 +168,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-accent transition-colors">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user?.profileImageUrl} />
+                    <AvatarImage src={user?.user_metadata?.avatar_url} />
                     <AvatarFallback className="bg-primary text-primary-foreground">{userInitials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 text-left">
-                    <p className="text-sm font-medium text-foreground">{user?.displayName || "User"}</p>
-                    <p className="text-xs text-muted-foreground">{user?.primaryEmail || "user@example.com"}</p>
+                    <p className="text-sm font-medium text-foreground">{user?.user_metadata?.full_name || "User"}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email || "user@example.com"}</p>
                   </div>
                 </button>
               </DropdownMenuTrigger>

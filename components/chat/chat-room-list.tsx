@@ -31,6 +31,7 @@ interface ChatRoomListProps {
   rooms: ChatRoom[]
   teams: Team[]
   selectedRoomId?: string
+  workspaceId?: string
   onRoomSelect: (roomId: string) => void
   onCreateRoom: (data: CreateRoomFormData) => Promise<boolean>
   loading?: boolean
@@ -41,6 +42,7 @@ export function ChatRoomList({
   rooms,
   teams,
   selectedRoomId,
+  workspaceId,
   onRoomSelect,
   onCreateRoom,
   loading = false,
@@ -73,8 +75,8 @@ export function ChatRoomList({
   }
 
   // Séparer les rooms par type
-  const teamRooms = rooms.filter(room => room.team_id)
-  const privateRooms = rooms.filter(room => !room.team_id)
+  const teamRooms = (rooms || []).filter(room => room.team_id)
+  const privateRooms = (rooms || []).filter(room => !room.team_id)
 
   const roomVariants = {
     hidden: { opacity: 0, x: -20 },
@@ -94,31 +96,31 @@ export function ChatRoomList({
         exit="exit"
         layout
         className={cn(
-          'group relative p-3 rounded-lg cursor-pointer transition-all duration-200',
+          'group relative p-2 sm:p-3 rounded-lg cursor-pointer transition-all duration-200',
           'hover:bg-accent/50 border border-transparent',
           isSelected && 'bg-accent border-accent-foreground/20 shadow-sm'
         )}
         onClick={() => onRoomSelect(room.id)}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className={cn(
-            'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center',
+            'flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center',
             room.is_private ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
           )}>
-            {room.is_private ? <Lock className="w-4 h-4" /> : <Hash className="w-4 h-4" />}
+            {room.is_private ? <Lock className="w-3 h-3 sm:w-4 sm:h-4" /> : <Hash className="w-3 h-3 sm:w-4 sm:h-4" />}
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h4 className="font-medium text-sm truncate">{room.name}</h4>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <h4 className="font-medium text-xs sm:text-sm truncate">{room.name}</h4>
               {team && (
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
                   {team.name}
                 </Badge>
               )}
             </div>
             {room.description && (
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
+              <p className="text-xs text-muted-foreground truncate mt-0.5 hidden sm:block">
                 {room.description}
               </p>
             )}
@@ -126,7 +128,8 @@ export function ChatRoomList({
 
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Users className="w-3 h-3" />
-            <span>{room.member_count || 0}</span>
+            <span className="hidden sm:inline">{room.member_count || 0}</span>
+            <span className="sm:hidden">{room.member_count || 0}</span>
           </div>
         </div>
 
@@ -144,20 +147,21 @@ export function ChatRoomList({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b">
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-primary" />
-          <h2 className="font-semibold">Chat Rooms</h2>
+          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+          <h2 className="font-semibold text-sm sm:text-base">Chat Rooms</h2>
         </div>
         
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" variant="outline">
-              <Plus className="w-4 h-4 mr-1" />
-              Nouveau
+            <Button size="sm" variant="outline" className="text-xs sm:text-sm">
+              <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              <span className="hidden sm:inline">Nouveau</span>
+              <span className="sm:hidden">+</span>
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent key="chat-room-create-dialog" className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Créer une nouvelle room</DialogTitle>
             </DialogHeader>
@@ -203,15 +207,21 @@ export function ChatRoomList({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Équipe (optionnel)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select 
+                        onValueChange={(value) => {
+                          // Si "no-team" est sélectionné, on passe undefined
+                          field.onChange(value === "no-team" ? undefined : value)
+                        }} 
+                        value={field.value || "no-team"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Sélectionner une équipe" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Aucune équipe</SelectItem>
-                          {teams.map((team) => (
+                          <SelectItem value="no-team">Aucune équipe</SelectItem>
+                          {(teams || []).map((team) => (
                             <SelectItem key={team.id} value={team.id}>
                               {team.name}
                             </SelectItem>
@@ -266,10 +276,10 @@ export function ChatRoomList({
 
       {/* Room List */}
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-4">
+        <div className="p-2 sm:p-3 space-y-3 sm:space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-6 sm:py-8">
+              <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
@@ -278,11 +288,11 @@ export function ChatRoomList({
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-2"
+                  className="space-y-1 sm:space-y-2"
                 >
                   <div className="flex items-center gap-2 px-2 py-1">
-                    <Users className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+                    <h3 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
                       Équipes
                     </h3>
                   </div>
@@ -297,11 +307,11 @@ export function ChatRoomList({
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-2"
+                  className="space-y-1 sm:space-y-2"
                 >
                   <div className="flex items-center gap-2 px-2 py-1">
-                    <Globe className="w-4 h-4 text-muted-foreground" />
-                    <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                    <Globe className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
+                    <h3 className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
                       Général
                     </h3>
                   </div>
@@ -312,7 +322,7 @@ export function ChatRoomList({
               )}
 
               {/* Empty State */}
-              {rooms.length === 0 && !loading && (
+              {(rooms || []).length === 0 && !loading && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import { useUser } from "@stackframe/stack"
+import { createClientComponentClient } from '@/lib/supabase-client'
 import { 
   Calendar,
   Plus,
@@ -56,6 +56,8 @@ export function GanttChart({ projectId, height = 600 }: GanttChartProps) {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [user, setUser] = useState<any>(null)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -67,31 +69,60 @@ export function GanttChart({ projectId, height = 600 }: GanttChartProps) {
   })
 
   const { toast } = useToast()
-  const user = useUser()
+  const supabaseClient = createClientComponentClient()
 
   useEffect(() => {
-    loadData()
-  }, [user, selectedProject])
+    initializeUser()
+  }, [])
+
+  useEffect(() => {
+    if (workspaceId) {
+      loadData()
+    }
+  }, [workspaceId, selectedProject])
+
+  const initializeUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabaseClient.auth.getUser()
+      if (!authUser) return
+
+      setUser(authUser)
+
+      // Get user's current workspace
+      const { data: memberData } = await supabaseClient
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('user_id', authUser.id)
+        .eq('status', 'active')
+        .single()
+
+      if (memberData?.workspace_id) {
+        setWorkspaceId(memberData.workspace_id)
+      }
+    } catch (error) {
+      console.error('Error initializing user:', error)
+    }
+  }
 
   const loadData = async () => {
-    if (!user?.id) return
+    if (!user?.id || !workspaceId) return
 
     try {
       // Load projects
-      const { data: projectsData, error: projectsError } = await supabase
+      const { data: projectsData, error: projectsError } = await supabaseClient
         .from('projects')
         .select('id, name')
-        .eq('created_by', user.id)
+        .eq('workspace_id', workspaceId)
 
       if (projectsError) throw projectsError
 
       setProjects(projectsData || [])
 
       // Load tasks
-      let tasksQuery = supabase
+      let tasksQuery = supabaseClient
         .from('tasks')
         .select('*')
-        .eq('created_by', user.id)
+        .eq('workspace_id', workspaceId)
         .order('start_date', { ascending: true })
 
       if (selectedProject && selectedProject !== "all") {
@@ -304,7 +335,7 @@ export function GanttChart({ projectId, height = 600 }: GanttChartProps) {
                 Nouvelle tâche
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent key="gantt-create-task-dialog" className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Créer une nouvelle tâche</DialogTitle>
               </DialogHeader>
@@ -547,7 +578,7 @@ export function GanttChart({ projectId, height = 600 }: GanttChartProps) {
       {/* Edit Task Dialog */}
       {editingTask && (
         <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-          <DialogContent className="sm:max-w-[500px]">
+            <DialogContent key={`gantt-edit-task-dialog-${editingTask?.id || 'new'}`} className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Modifier la tâche</DialogTitle>
             </DialogHeader>

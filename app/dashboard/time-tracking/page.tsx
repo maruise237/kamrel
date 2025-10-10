@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Clock, TrendingUp, Calendar, Target, Plus, Briefcase } from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { useUser } from "@stackframe/stack"
+import { createClientComponentClient } from '@/lib/supabase-client'
 import { KamrelFullScreenLoader, KamrelSkeleton } from "@/components/ui/kamrel-loader"
 import { useGlobalLoading } from "@/components/layout/global-loading-provider"
 
@@ -20,18 +20,47 @@ export default function TimeTrackingPage() {
   const [isStatsLoading, setIsStatsLoading] = useState(false)
   const [isEntriesLoading, setIsEntriesLoading] = useState(false)
   const [timeEntries, setTimeEntries] = useState([])
+  const [user, setUser] = useState<any>(null)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
 
-  const user = useUser()
   const { showLoader } = useGlobalLoading()
+  const supabaseClient = createClientComponentClient()
 
   useEffect(() => {
-    if (user?.id) {
+    initializeUser()
+  }, [])
+
+  useEffect(() => {
+    if (user?.id && workspaceId) {
       loadTimeStats()
     }
-  }, [user])
+  }, [user, workspaceId])
+
+  const initializeUser = async () => {
+    try {
+      const { data: { user: authUser } } = await supabaseClient.auth.getUser()
+      if (!authUser) return
+
+      setUser(authUser)
+
+      // Get user's current workspace
+      const { data: memberData } = await supabaseClient
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('user_id', authUser.id)
+        .eq('status', 'active')
+        .single()
+
+      if (memberData?.workspace_id) {
+        setWorkspaceId(memberData.workspace_id)
+      }
+    } catch (error) {
+      console.error('Error initializing user:', error)
+    }
+  }
 
   const loadTimeStats = async () => {
-    if (!user?.id) return
+    if (!user?.id || !workspaceId) return
 
     setIsStatsLoading(true)
     try {
@@ -44,31 +73,31 @@ export default function TimeTrackingPage() {
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
       // Today's hours
-      const { data: todayData } = await supabase
+      const { data: todayData } = await supabaseClient
         .from('time_entries')
         .select('duration')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .gte('created_at', today.toISOString().split('T')[0])
 
       // Week's hours
-      const { data: weekData } = await supabase
+      const { data: weekData } = await supabaseClient
         .from('time_entries')
         .select('duration')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .gte('created_at', startOfWeek.toISOString())
 
       // Month's hours
-      const { data: monthData } = await supabase
+      const { data: monthData } = await supabaseClient
         .from('time_entries')
         .select('duration')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
         .gte('created_at', startOfMonth.toISOString())
 
       // Total hours
-      const { data: totalData } = await supabase
+      const { data: totalData } = await supabaseClient
         .from('time_entries')
         .select('duration')
-        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
 
       setTodayHours(todayData?.reduce((acc, entry) => acc + entry.duration, 0) || 0)
       setWeekHours(weekData?.reduce((acc, entry) => acc + entry.duration, 0) || 0)
@@ -171,7 +200,7 @@ export default function TimeTrackingPage() {
         </div>
 
         {/* Time Tracker Component */}
-        <TimeTracker onTimeUpdate={loadTimeStats} />
+        <TimeTracker workspaceId={workspaceId} onTimeUpdate={loadTimeStats} />
 
         {/* Time Entries Table */}
         <Card className="p-6">

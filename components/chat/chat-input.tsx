@@ -82,10 +82,10 @@ export function ChatInput({
   const isNearLimit = characterCount > maxLength * 0.8
 
   return (
-    <div className={cn('p-4 border-t bg-background', className)}>
+    <div className={cn('p-2 sm:p-4 border-t bg-background', className)}>
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-2">
-          <div className="flex gap-2">
+          <div className="flex gap-1 sm:gap-2">
             <div className="flex-1 relative">
               <FormField
                 control={form.control}
@@ -99,7 +99,7 @@ export function ChatInput({
                         onKeyDown={handleKeyDown}
                         placeholder={placeholder}
                         disabled={disabled || isSubmitting}
-                        className="min-h-[40px] max-h-[120px] resize-none pr-12"
+                        className="min-h-[36px] sm:min-h-[40px] max-h-[100px] sm:max-h-[120px] resize-none pr-10 sm:pr-12 text-sm sm:text-base"
                         maxLength={maxLength}
                       />
                     </FormControl>
@@ -112,7 +112,7 @@ export function ChatInput({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background px-1 rounded"
+                  className="absolute bottom-1 sm:bottom-2 right-1 sm:right-2 text-xs text-muted-foreground bg-background px-1 rounded"
                 >
                   {characterCount}/{maxLength}
                 </motion.div>
@@ -123,17 +123,17 @@ export function ChatInput({
               type="submit"
               size="icon"
               disabled={!messageContent?.trim() || isSubmitting || disabled}
-              className="h-10 w-10 shrink-0"
+              className="h-9 w-9 sm:h-10 sm:w-10 shrink-0"
             >
               {isSubmitting ? (
                 <motion.div
                   animate={{ rotate: 360 }}
                   transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 >
-                  <Loader2 className="h-4 w-4" />
+                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4" />
                 </motion.div>
               ) : (
-                <Send className="h-4 w-4" />
+                <Send className="h-3 w-3 sm:h-4 sm:w-4" />
               )}
             </Button>
           </div>
@@ -154,7 +154,7 @@ export function ChatInput({
             <motion.p
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-sm text-destructive"
+              className="text-xs sm:text-sm text-destructive"
             >
               Le message dépasse la limite de {maxLength} caractères
             </motion.p>

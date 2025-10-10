@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase-client'
 import { User } from '@supabase/supabase-js'
 
 export interface ChatRoom {
@@ -22,7 +22,8 @@ export interface UseChatRoomsOptions {
   user: User | null
 }
 
-export function useChatRooms({ user }: UseChatRoomsOptions) {
+export function useChatRooms(options?: UseChatRoomsOptions) {
+  const user = options?.user || null
   const [rooms, setRooms] = useState<ChatRoom[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,13 +38,20 @@ export function useChatRooms({ user }: UseChatRoomsOptions) {
       setLoading(true)
       setError(null)
 
-      // Récupérer les équipes de l'utilisateur
+      // Récupérer les équipes de l'utilisateur depuis Supabase
       const { data: teamMemberships } = await supabase
         .from('team_members')
         .select('team_id, teams(id, name)')
         .eq('user_id', user.id)
+        .eq('status', 'active')
 
       const teamIds = teamMemberships?.map((tm: any) => tm.team_id) || []
+
+      if (teamIds.length === 0) {
+        console.log('User has no active team memberships')
+        setRooms([])
+        return
+      }
 
       // Récupérer les salles de chat
       const { data: chatRooms, error: roomsError } = await supabase
@@ -112,15 +120,17 @@ export function useChatRooms({ user }: UseChatRoomsOptions) {
   }, [user, supabase])
 
   // Créer une nouvelle salle de chat
-  const createRoom = useCallback(async (
-    name: string, 
-    description?: string, 
-    teamId?: string, 
-    isPrivate: boolean = false
-  ) => {
+  const createRoom = useCallback(async (data: {
+    name: string;
+    description?: string;
+    team_id?: string;
+    is_private?: boolean;
+  }) => {
     if (!user) return null
 
     try {
+      const { name, description, team_id: teamId, is_private: isPrivate = false } = data
+      
       const roomId = isPrivate 
         ? `private_${user.id}_${Date.now()}`
         : teamId 

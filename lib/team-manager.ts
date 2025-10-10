@@ -1,6 +1,7 @@
 "use client"
 
 import { supabase } from "@/lib/supabase"
+import { supabaseAdmin, withAdminAuth, isServer } from "@/lib/supabase-admin"
 import { stackApp } from "@/stack/client"
 
 export class TeamManager {
@@ -67,57 +68,118 @@ export class TeamManager {
   /**
    * Syncs a Stack Auth team to Supabase database
    */
-  private static async syncTeamToSupabase(team: any, userId: string) {
+  static async syncTeamToSupabase(team: any, userId: string) {
     try {
-      const { error } = await supabase
-        .from('teams')
-        .upsert({
-          id: team.id,
-          name: team.displayName,
-          description: team.description || 'Équipe créée automatiquement',
-          owner_id: userId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-
-      if (error) {
-        console.error('Error syncing team to Supabase:', error)
-        throw error
+      console.log('Syncing team to Supabase:', { teamId: team.id, teamName: team.displayName, userId })
+      
+      // Validate required parameters
+      if (!team?.id) {
+        throw new Error('Team ID is required for synchronization')
+      }
+      
+      if (!userId) {
+        throw new Error('User ID is required for synchronization')
       }
 
-      console.log('Team synced to Supabase:', team.id)
+      // Prepare team data for upsert
+      const teamData = {
+        id: team.id,
+        name: team.displayName || team.name || 'Équipe sans nom',
+        description: team.description || 'Équipe créée automatiquement',
+        owner_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      console.log('Team data to sync:', teamData)
+
+      // Use admin client for secure operations if on server, otherwise use regular client
+      const client = isServer ? supabaseAdmin : supabase
+      
+      const { data, error } = await client
+        .from('teams')
+        .upsert(teamData, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select()
+
+      if (error) {
+        console.error('Supabase error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        })
+        throw new Error(`Failed to sync team to Supabase: ${error.message} (Code: ${error.code})`)
+      }
+
+      console.log('Team successfully synced to Supabase:', data)
+      return data
     } catch (error) {
       console.error('Error in syncTeamToSupabase:', error)
-      throw error
+      throw new Error(`Error syncing team to Supabase: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   /**
    * Adds a user as a team member in Supabase
    */
-  private static async addUserToTeamInSupabase(teamId: string, userId: string, email: string, name: string) {
+  static async addUserToTeamInSupabase(teamId: string, userId: string, email: string, name: string) {
     try {
-      const { error } = await supabase
-        .from('team_members')
-        .upsert({
-          team_id: teamId,
-          user_id: userId,
-          email: email,
-          name: name || 'Utilisateur',
-          role: 'admin',
-          status: 'active',
-          joined_at: new Date().toISOString()
-        })
-
-      if (error) {
-        console.error('Error adding user to team in Supabase:', error)
-        throw error
+      console.log('Adding user to team in Supabase:', { teamId, userId, email, name })
+      
+      // Validate required parameters
+      if (!teamId) {
+        throw new Error('Team ID is required')
+      }
+      
+      if (!userId) {
+        throw new Error('User ID is required')
+      }
+      
+      if (!email) {
+        throw new Error('User email is required')
       }
 
-      console.log('User added to team in Supabase:', teamId)
+      const memberData = {
+        team_id: teamId,
+        user_id: userId,
+        email: email,
+        name: name || 'Utilisateur',
+        role: 'admin' as const,
+        status: 'active' as const,
+        joined_at: new Date().toISOString()
+      }
+
+      console.log('Member data to add:', memberData)
+
+      // Use admin client for secure operations if on server, otherwise use regular client
+      const client = isServer ? supabaseAdmin : supabase
+
+      const { data, error } = await client
+        .from('team_members')
+        .upsert(memberData, {
+          onConflict: 'team_id,user_id',
+          ignoreDuplicates: false
+        })
+        .select()
+
+      if (error) {
+        console.error('Supabase error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        })
+        throw new Error(`Failed to add user to team in Supabase: ${error.message} (Code: ${error.code})`)
+      }
+
+      console.log('User successfully added to team in Supabase:', data)
+      return data
     } catch (error) {
       console.error('Error in addUserToTeamInSupabase:', error)
-      throw error
+      throw new Error(`Error adding user to team in Supabase: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import { useUser } from "@stackframe/stack"
+import { User } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@/lib/supabase"
 import { 
   Upload, 
   Download, 
@@ -56,15 +57,40 @@ export function FileManager({ projectId, teamId, showProjectFiles = false }: Fil
   const [projects, setProjects] = useState<any[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   
+  // Supabase Auth state
+  const [user, setUser] = useState<User | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
+  
   const { toast } = useToast()
-  const user = useUser()
 
   useEffect(() => {
-    loadFiles()
-    if (showProjectFiles) {
-      loadProjects()
+    const supabaseClient = createClientComponentClient()
+    
+    // Get initial user
+    supabaseClient.auth.getUser().then(({ data: { user } }) => {
+      setUser(user)
+      setUserLoading(false)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null)
+        setUserLoading(false)
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!userLoading) {
+      loadFiles()
+      if (showProjectFiles) {
+        loadProjects()
+      }
     }
-  }, [projectId, teamId, user])
+  }, [projectId, teamId, user, userLoading])
 
   const loadFiles = async () => {
     if (!user?.id) return
@@ -181,15 +207,22 @@ export function FileManager({ projectId, teamId, showProjectFiles = false }: Fil
 
       if (error) throw error
 
-      // Create download link
+      // Create download link using a safer approach
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
       a.download = file.original_name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      a.style.display = 'none'
+      
+      // Use a timeout to ensure React has finished its current render cycle
+      setTimeout(() => {
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }, 100)
+      }, 0)
 
       // Update download count
       await supabase

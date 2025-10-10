@@ -1,15 +1,80 @@
 import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient, createServerClient } from '@supabase/ssr'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+// Client-side Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Types pour la base de données
+// Client component client (for use in client components)
+export const createSupabaseClient = () => createBrowserClient(supabaseUrl, supabaseAnonKey)
+
+// For backward compatibility
+export const createClientComponentClient = () => createBrowserClient(supabaseUrl, supabaseAnonKey)
+
+// Server component client (for use in server components)
+export const createSupabaseServerClient = () => {
+  // Import cookies dynamically to avoid issues with client components
+  const { cookies } = require('next/headers')
+  const cookieStore = cookies()
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+    },
+  })
+}
+
+// Admin client (for server-side operations that require service role)
+export const createSupabaseAdminClient = () => {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+}
+
+// Types pour la base de données - Multi-tenant
+export interface Workspace {
+  id: string
+  name: string
+  slug: string
+  owner_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkspaceMember {
+  id: string
+  workspace_id: string
+  user_id: string
+  role: 'owner' | 'admin' | 'member'
+  joined_at: string
+}
+
+export interface Invite {
+  id: string
+  workspace_id: string
+  email: string
+  role: 'admin' | 'member'
+  token: string
+  invited_by: string
+  accepted_by: string | null
+  accepted_at: string | null
+  expires_at: string
+  created_at: string
+}
+
+// Legacy types - updated with workspace_id
 export interface Team {
   id: string
   name: string
   description?: string
+  workspace_id: string
   created_at: string
   updated_at: string
   owner_id: string
@@ -31,7 +96,8 @@ export interface Project {
   id: string
   name: string
   description?: string
-  team_id: string
+  workspace_id: string
+  team_id?: string
   status: 'active' | 'completed' | 'on_hold' | 'cancelled'
   priority: 'low' | 'medium' | 'high' | 'urgent'
   start_date?: string
@@ -60,11 +126,13 @@ export interface Task {
 export interface Message {
   id: string
   content: string
+  workspace_id: string
   sender_id: string
   receiver_id?: string
   team_id?: string
   project_id?: string
-  message_type: 'direct' | 'team' | 'project'
+  room_id?: string
+  message_type: 'direct' | 'team' | 'project' | 'room'
   created_at: string
   updated_at: string
   is_read: boolean
@@ -136,4 +204,68 @@ export interface Notification {
   is_read: boolean
   created_at: string
   expires_at?: string
+}
+
+// Utility functions for multi-tenant operations
+export const getCurrentWorkspaceId = async () => {
+  const supabase = createSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user?.app_metadata?.workspace_id) {
+    return null
+  }
+  
+  return user.app_metadata.workspace_id as string
+}
+
+export const getUserWorkspaces = async () => {
+  const supabase = createSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) return []
+  
+  const { data: workspaces } = await supabase
+    .from('workspace_members')
+    .select(`
+      role,
+      workspace:workspaces(*)
+    `)
+    .eq('user_id', user.id)
+  
+  return workspaces || []
+}
+
+export const switchWorkspace = async (workspaceId: string) => {
+  const supabase = createSupabaseClient()
+  
+  // Call Edge Function to update user metadata
+  const { data, error } = await supabase.functions.invoke('update-user-metadata', {
+    body: { workspace_id: workspaceId }
+  })
+  
+  if (error) {
+    throw new Error(error.message)
+  }
+  
+  // Refresh the session to get updated JWT
+  await supabase.auth.refreshSession()
+  
+  return data
+}
+
+export const createWorkspace = async (name: string, slug: string) => {
+  const supabase = createSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) throw new Error('User not authenticated')
+  
+  const { data, error } = await supabase.rpc('create_workspace_with_owner', {
+    workspace_name: name,
+    workspace_slug: slug,
+    owner_id: user.id
+  })
+  
+  if (error) throw error
+  
+  return data
 }

@@ -19,14 +19,16 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { useUser } from "@stackframe/stack"
+import { createClientComponentClient } from '@/lib/supabase-client'
 import { supabase } from "@/lib/supabase"
 import { supabaseManager } from "@/lib/supabase-manager"
 import { KamrelLoader, KamrelFullScreenLoader, KamrelCardSkeleton, KamrelSkeleton } from "@/components/ui/kamrel-loader"
+import { User } from '@supabase/supabase-js'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const user = useUser({ or: "redirect" })
+  const [user, setUser] = useState<User | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDescription, setNewProjectDescription] = useState("")
@@ -42,13 +44,50 @@ export default function DashboardPage() {
   const [isDataLoading, setIsDataLoading] = useState(false)
   const [isMigrated, setIsMigrated] = useState(false)
 
+  // Initialize Supabase client
+  const supabaseClient = createClientComponentClient()
+
+  // Check authentication status
   useEffect(() => {
-    if (!user) {
-      router.push("/login")
-    } else {
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabaseClient.auth.getUser()
+        
+        if (error || !user) {
+          router.push('/login')
+          return
+        }
+        
+        setUser(user)
+        setUserLoading(false)
+      } catch (error) {
+        console.error('Error checking auth:', error)
+        router.push('/login')
+      }
+    }
+
+    checkAuth()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT' || !session?.user) {
+          router.push('/login')
+        } else if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          setUserLoading(false)
+        }
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [router, supabaseClient])
+
+  useEffect(() => {
+    if (!userLoading && user) {
       initializeDashboard()
     }
-  }, [user, router])
+  }, [user, userLoading])
 
   const initializeDashboard = async () => {
     try {
@@ -61,17 +100,12 @@ export default function DashboardPage() {
         return
       }
 
-      // Migrer les données du stockage local vers Supabase (une seule fois)
-      if (!isMigrated && user?.selectedTeam?.id) {
-        console.log('Migration des données vers Supabase...')
-        await supabaseManager.migrateFromLocalStorage(user.id, user.selectedTeam.id)
-        await supabaseManager.cleanupTestData(user.id)
-        setIsMigrated(true)
-        console.log('Migration terminée')
-      }
+      // Pour l'instant, on utilise un workspace par défaut
+      // TODO: Implémenter la gestion des workspaces avec Supabase Auth
+      const defaultWorkspaceId = 'default-workspace'
 
       // Charger les données depuis Supabase
-      await loadDashboardData()
+      await loadDashboardData(defaultWorkspaceId)
     } catch (error) {
       console.error('Erreur lors de l\'initialisation du tableau de bord:', error)
     } finally {
@@ -79,8 +113,8 @@ export default function DashboardPage() {
     }
   }
 
-  const loadDashboardData = async () => {
-    if (!user?.selectedTeam?.id) {
+  const loadDashboardData = async (workspaceId: string) => {
+    if (!user || !workspaceId) {
       setIsLoading(false)
       return
     }
@@ -88,40 +122,57 @@ export default function DashboardPage() {
     try {
       setIsDataLoading(true)
       
-      // Charger les projets récents avec animation
-      const { data: projects, error: projectsError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('team_id', user.selectedTeam.id)
-        .order('updated_at', { ascending: false })
-        .limit(3)
+      // Optimisation: Charger les données en parallèle avec Promise.all
+      const [projectsResult, allProjectsResult] = await Promise.all([
+        // Charger les projets récents
+        supabase
+          .from('projects')
+          .select('id, name, description, status, updated_at')
+          .eq('workspace_id', workspaceId)
+          .order('updated_at', { ascending: false })
+          .limit(3),
+        
+        // Charger tous les projets pour les statistiques
+        supabase
+          .from('projects')
+          .select('id, status')
+          .eq('workspace_id', workspaceId)
+      ])
 
-      if (projectsError) throw projectsError
+      if (projectsResult.error) {
+        console.error('Error loading projects:', projectsResult.error)
+      }
 
-      // Charger les statistiques
-      const { data: allProjects } = await supabase
-        .from('projects')
-        .select('id, status')
-        .eq('team_id', user.selectedTeam.id)
+      if (allProjectsResult.error) {
+        console.error('Error loading project stats:', allProjectsResult.error)
+      }
 
-      const { data: allTasks } = await supabase
-        .from('tasks')
-        .select('id, status, due_date')
-        .in('project_id', allProjects?.map(p => p.id) || [])
+      // Charger les tâches seulement si on a des projets
+      let allTasks = []
+      if (allProjectsResult.data && allProjectsResult.data.length > 0) {
+        const projectIds = allProjectsResult.data.map(p => p.id)
+        const { data: tasksData } = await supabase
+          .from('tasks')
+          .select('id, status, due_date')
+          .in('project_id', projectIds)
+        
+        allTasks = tasksData || []
+      }
 
-      const activeProjects = allProjects?.filter(p => p.status === 'active').length || 0
-      const activeTasks = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'todo').length || 0
-      const completedTasks = allTasks?.filter(t => t.status === 'completed').length || 0
-      const overdueTasks = allTasks?.filter(t => 
+      // Calculer les statistiques de manière optimisée
+      const activeProjects = allProjectsResult.data?.filter(p => p.status === 'active').length || 0
+      const activeTasks = allTasks.filter(t => t.status === 'in_progress' || t.status === 'todo').length
+      const completedTasks = allTasks.filter(t => t.status === 'completed').length
+      const overdueTasks = allTasks.filter(t => 
         t.status !== 'completed' && 
         t.due_date && 
         new Date(t.due_date) < new Date()
-      ).length || 0
+      ).length
 
-      // Ajouter un délai pour une transition fluide
-      await new Promise(resolve => setTimeout(resolve, 300))
+      // Réduire le délai d'attente pour une meilleure réactivité
+      await new Promise(resolve => setTimeout(resolve, 100))
 
-      setRecentProjects(projects || [])
+      setRecentProjects(projectsResult.data || [])
       setStats({
         activeProjects,
         activeTasks,
@@ -137,66 +188,101 @@ export default function DashboardPage() {
   }
 
   const handleCreateProject = async () => {
-    if (!newProjectName.trim() || !user?.selectedTeam?.id) return
+    if (!newProjectName.trim() || !user) return
 
     try {
       setIsCreating(true)
       
-      // Ensure team exists in Supabase before creating project
-      console.log('Verifying team exists in Supabase...')
-      const { data: teamExists, error: teamError } = await supabase
-        .from('teams')
+      // Créer d'abord un workspace par défaut si nécessaire
+      let workspaceId = 'default-workspace'
+      
+      // Vérifier si l'utilisateur a déjà un workspace
+      const { data: existingWorkspaces } = await supabase
+        .from('workspaces')
         .select('id')
-        .eq('id', user.selectedTeam.id)
-        .single()
-
-      if (teamError || !teamExists) {
-        console.log('Team not found in Supabase, syncing team first...')
+        .eq('created_by', user.id)
+        .limit(1)
+      
+      if (existingWorkspaces && existingWorkspaces.length > 0) {
+        workspaceId = existingWorkspaces[0].id
+      } else {
+        // Créer un workspace par défaut
+        const { data: newWorkspace, error: workspaceError } = await supabase
+          .from('workspaces')
+          .insert({
+            name: 'Mon Workspace',
+            description: 'Workspace par défaut',
+            created_by: user.id
+          })
+          .select('id')
+          .single()
         
-        // Import TeamManager dynamically to avoid circular dependencies
-        const { TeamManager } = await import('@/lib/team-manager')
-        await TeamManager.ensureUserHasTeam(user)
-        
-        // Wait a bit for the team to be synced
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        if (workspaceError) {
+          console.error('Erreur lors de la création du workspace:', workspaceError)
+          // Utiliser l'ID par défaut si la création échoue
+          workspaceId = 'default-workspace'
+        } else {
+          workspaceId = newWorkspace.id
+        }
       }
       
-      // Créer le projet dans Supabase
+      // Créer le projet avec des données optimisées
+      const projectData = {
+        name: newProjectName.trim(),
+        description: newProjectDescription?.trim() || '',
+        workspace_id: workspaceId,
+        created_by: user.id,
+        status: 'active',
+        priority: 'medium',
+        start_date: new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
       const { data: project, error } = await supabase
         .from('projects')
-        .insert({
-          name: newProjectName,
-          description: newProjectDescription,
-          team_id: user.selectedTeam.id,
-          created_by: user.id,
-          status: 'active'
-        })
-        .select()
+        .insert(projectData)
+        .select('*')
         .single()
 
       if (error) {
         console.error('Erreur lors de la création du projet:', error)
+        // Afficher un message d'erreur à l'utilisateur
+        alert('Erreur lors de la création du projet. Veuillez réessayer.')
         return
       }
 
-      // Recharger les données du tableau de bord
-      await loadDashboardData()
+      console.log('Projet créé avec succès:', project)
+
+      // Recharger uniquement les projets récents au lieu de toutes les données
+      const { data: updatedProjects } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('workspace_id', workspaceId)
+        .order('updated_at', { ascending: false })
+        .limit(3)
+
+      if (updatedProjects) {
+        setRecentProjects(updatedProjects)
+      }
+      
+      // Mettre à jour les statistiques de manière optimisée
+      setStats(prev => ({
+        ...prev,
+        activeProjects: prev.activeProjects + 1
+      }))
       
       // Réinitialiser le formulaire
       setNewProjectName("")
       setNewProjectDescription("")
       setIsCreateDialogOpen(false)
-      console.log('Projet créé avec succès:', project)
       
-      // Recharger les données
-      await loadDashboardData()
+      // Afficher un message de succès
+      console.log('Projet créé avec succès!')
       
-      // Réinitialiser le formulaire
-      setNewProjectName('')
-      setNewProjectDescription('')
-      setIsCreateDialogOpen(false)
     } catch (error) {
       console.error('Erreur lors de la création du projet:', error)
+      alert('Une erreur inattendue s\'est produite. Veuillez réessayer.')
     } finally {
       setIsCreating(false)
     }
@@ -209,6 +295,17 @@ export default function DashboardPage() {
   const getProjectColor = (index: number) => {
     const colors = ['bg-primary', 'bg-secondary', 'bg-green-500', 'bg-blue-500', 'bg-purple-500']
     return colors[index % colors.length]
+  }
+
+  // Show loading while checking authentication
+  if (userLoading) {
+    return (
+      <KamrelFullScreenLoader 
+        isLoading={true} 
+        text="Vérification de l'authentification"
+        subText="Chargement de votre session..."
+      />
+    )
   }
 
   if (!user) {
@@ -252,9 +349,13 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-base font-medium text-muted-foreground">Projets actifs</p>
-                  <p className="text-3xl font-bold text-foreground mt-2">
-                    {isDataLoading ? <KamrelSkeleton className="h-8 w-12" /> : stats.activeProjects}
-                  </p>
+                  <div className="text-3xl font-bold text-foreground mt-2">
+                    {isDataLoading ? (
+                      <KamrelSkeleton className="h-8 w-12" />
+                    ) : (
+                      stats.activeProjects
+                    )}
+                  </div>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                   <TrendingUp className="h-6 w-6 text-primary" />
@@ -266,9 +367,13 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-base font-medium text-muted-foreground">Tâches en cours</p>
-                  <p className="text-3xl font-bold text-foreground mt-2">
-                    {isDataLoading ? <KamrelSkeleton className="h-8 w-12" /> : stats.activeTasks}
-                  </p>
+                  <div className="text-3xl font-bold text-foreground mt-2">
+                    {isDataLoading ? (
+                      <KamrelSkeleton className="h-8 w-12" />
+                    ) : (
+                      stats.activeTasks
+                    )}
+                  </div>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-secondary/10 flex items-center justify-center">
                   <Clock className="h-6 w-6 text-secondary" />
@@ -280,9 +385,13 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-base font-medium text-muted-foreground">Tâches terminées</p>
-                  <p className="text-3xl font-bold text-foreground mt-2">
-                    {isDataLoading ? <KamrelSkeleton className="h-8 w-12" /> : stats.completedTasks}
-                  </p>
+                  <div className="text-3xl font-bold text-foreground mt-2">
+                    {isDataLoading ? (
+                      <KamrelSkeleton className="h-8 w-12" />
+                    ) : (
+                      stats.completedTasks
+                    )}
+                  </div>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center">
                   <CheckCircle2 className="h-6 w-6 text-green-500" />
@@ -294,9 +403,13 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-base font-medium text-muted-foreground">En retard</p>
-                  <p className="text-3xl font-bold text-foreground mt-2">
-                    {isDataLoading ? <KamrelSkeleton className="h-8 w-12" /> : stats.overdueTasks}
-                  </p>
+                  <div className="text-3xl font-bold text-foreground mt-2">
+                    {isDataLoading ? (
+                      <KamrelSkeleton className="h-8 w-12" />
+                    ) : (
+                      stats.overdueTasks
+                    )}
+                  </div>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
                   <AlertCircle className="h-6 w-6 text-destructive" />
@@ -355,7 +468,7 @@ export default function DashboardPage() {
       </DashboardLayout>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="animate-in fade-in-50 zoom-in-95 duration-300">
+        <DialogContent key="dashboard-create-project-dialog" className="animate-in fade-in-50 zoom-in-95 duration-300">
           <DialogHeader>
             <DialogTitle className="text-xl">Créer un nouveau projet</DialogTitle>
             <DialogDescription className="text-base">

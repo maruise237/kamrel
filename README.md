@@ -1,8 +1,19 @@
 # 🚀 KAMREL - Plateforme de Gestion de Projets SaaS
 
 ![KAMREL Banner](https://img.shields.io/badge/KAMREL-SaaS%20Platform-blue?style=for-the-badge&logo=react)
+![Version](https://img.shields.io/badge/version-0.1.0-green?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 **KAMREL** est une plateforme SaaS moderne de gestion de projets construite avec Next.js 15, React 19, et TypeScript. Elle offre une expérience utilisateur fluide avec des animations KAMREL personnalisées, une authentification sécurisée, et une interface utilisateur élégante.
+
+## 🌟 Aperçu du Projet
+
+KAMREL combine les meilleures technologies modernes pour créer une solution complète de gestion de projets :
+- **Interface moderne** avec animations fluides
+- **Collaboration en temps réel** avec chat intégré
+- **Gestion multi-tenant** avec espaces de travail isolés
+- **Suivi avancé** du temps et des performances
+- **Sécurité renforcée** avec authentification robuste
 
 ## ✨ Fonctionnalités Principales
 
@@ -70,8 +81,8 @@
 
 1. **Cloner le repository**
 ```bash
-git clone https://github.com/votre-username/kamrel.git
-cd kamrel
+git clone https://github.com/votre-username/kamrel-saas-platform.git
+cd kamrel-saas-platform
 ```
 
 2. **Installer les dépendances**
@@ -125,7 +136,7 @@ Ouvrez [http://localhost:3000](http://localhost:3000) dans votre navigateur.
 ## 📁 Structure du Projet
 
 ```
-kamrel/
+kamrel-saas-platform/
 ├── app/                          # App Router Next.js 15
 │   ├── dashboard/               # Pages du tableau de bord
 │   │   ├── chat/               # Module de chat
@@ -205,25 +216,59 @@ vercel --prod
 ### Variables d'environnement de production
 Assurez-vous de configurer toutes les variables d'environnement dans votre plateforme de déploiement.
 
+## 📋 Instructions pour GitHub
+
+### Initialiser le repository Git
+
+1. **Initialiser Git dans votre projet**
+```bash
+git init
+git add .
+git commit -m "Initial commit: KAMREL SaaS Platform"
+```
+
+2. **Créer un nouveau repository sur GitHub**
+   - Allez sur [GitHub](https://github.com)
+   - Cliquez sur "New repository"
+   - Nommez-le `kamrel-saas-platform`
+   - Laissez-le vide (pas de README, .gitignore, ou licence)
+
+3. **Connecter votre projet local à GitHub**
+```bash
+git remote add origin https://github.com/VOTRE-USERNAME/kamrel-saas-platform.git
+git branch -M main
+git push -u origin main
+```
+
+### Variables d'environnement pour GitHub
+
+Assurez-vous de configurer les secrets GitHub Actions si vous utilisez CI/CD :
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `STACK_PROJECT_ID`
+- `STACK_PUBLISHABLE_CLIENT_KEY`
+- `STACK_SECRET_SERVER_KEY`
+
 ## 🤝 Contribution
 
-Les contributions sont les bienvenues ! Voici comment contribuer :
+1. Fork le projet
+2. Créez votre branche feature (`git checkout -b feature/AmazingFeature`)
+3. Committez vos changements (`git commit -m 'Add some AmazingFeature'`)
+4. Push vers la branche (`git push origin feature/AmazingFeature`)
+5. Ouvrez une Pull Request
 
-1. **Fork** le projet
-2. **Créez** une branche pour votre fonctionnalité (`git checkout -b feature/AmazingFeature`)
-3. **Committez** vos changements (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** vers la branche (`git push origin feature/AmazingFeature`)
-5. **Ouvrez** une Pull Request
+## 📄 Licence
 
-### Standards de Code
-- Utilisez TypeScript pour tous les nouveaux fichiers
-- Suivez les conventions ESLint configurées
-- Ajoutez des tests pour les nouvelles fonctionnalités
-- Documentez les composants complexes
+Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
-## 📝 Licence
+## 🙏 Remerciements
 
-Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+- [Next.js](https://nextjs.org/) pour le framework React
+- [Supabase](https://supabase.com/) pour la base de données et l'authentification
+- [Stack Auth](https://stack-auth.com/) pour l'authentification avancée
+- [Tailwind CSS](https://tailwindcss.com/) pour le styling
+- [Radix UI](https://www.radix-ui.com/) pour les composants accessibles
 
 ## 🆘 Support
 
@@ -233,19 +278,37 @@ Si vous rencontrez des problèmes ou avez des questions :
 2. **Discussions** - Pour les questions générales
 3. **Documentation** - Consultez le guide de déploiement dans `DEPLOYMENT_GUIDE.md`
 
+---
+
+<div align="center">
+  <p>Fait avec ❤️ par l'équipe KAMREL</p>
+  <p>
+    <a href="https://github.com/votre-username/kamrel-saas-platform/issues">Signaler un Bug</a>
+    ·
+    <a href="https://github.com/votre-username/kamrel-saas-platform/issues">Demander une Fonctionnalité</a>
+  </p>
+</div>
+
 ## 🔄 Changelog
 
 ### Version 0.1.0 (Actuelle)
-- ✅ Interface utilisateur complète avec animations KAMREL
+- ✅ Interface utilisateur moderne avec Tailwind CSS
 - ✅ Authentification sécurisée avec Stack Auth
-- ✅ Gestion de projets avec CRUD complet
-- ✅ Tableau de bord interactif
-- ✅ Suivi du temps intégré
-- ✅ Chat en temps réel
-- ✅ Gestion d'équipe
-- ✅ Diagramme de Gantt
-- ✅ Mode sombre/clair
-- ✅ Interface responsive
+- ✅ Gestion de projets avec tableaux Kanban
+- ✅ Chat en temps réel intégré
+- ✅ Suivi du temps et rapports
+- ✅ Gestion d'équipe et permissions
+- ✅ Diagrammes de Gantt interactifs
+- ✅ Gestion de fichiers
+- ✅ Architecture multi-tenant
+- ✅ Base de données Supabase avec RLS
+
+### Prochaines versions
+- 🔄 Notifications push
+- 🔄 API REST complète
+- 🔄 Application mobile
+- 🔄 Intégrations tierces (Slack, GitHub, etc.)
+- 🔄 Rapports avancés et analytics
 
 ## 🎯 Roadmap
 

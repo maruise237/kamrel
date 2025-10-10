@@ -3,8 +3,6 @@ import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
-import { StackProvider, StackTheme } from "@stackframe/stack"
-import { stackServerApp } from "@/stack/server"
 import { GlobalLoadingProvider } from "@/components/layout/global-loading-provider"
 import { PageTransition } from "@/components/layout/page-transition"
 
@@ -32,15 +30,11 @@ html {
         `}</style>
       </head>
       <body className="dark" suppressHydrationWarning>
-        <StackProvider app={stackServerApp}>
-          <StackTheme theme="dark">
-            <GlobalLoadingProvider>
-              <PageTransition>
-                {children}
-              </PageTransition>
-            </GlobalLoadingProvider>
-          </StackTheme>
-        </StackProvider>
+        <GlobalLoadingProvider>
+          <PageTransition>
+            {children}
+          </PageTransition>
+        </GlobalLoadingProvider>
       </body>
     </html>
   )

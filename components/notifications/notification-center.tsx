@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { supabase, Notification } from "@/lib/supabase"
-import { useUser } from "@stackframe/stack"
+import { User } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@/lib/supabase"
 import { useToast } from "@/hooks/use-toast"
 import { formatDistanceToNow } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -23,8 +24,28 @@ export function NotificationCenter({ className }: NotificationCenterProps) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { user } = useUser()
+  const [user, setUser] = useState<User | null>(null)
   const { toast } = useToast()
+  const supabaseClient = createClientComponentClient()
+
+  useEffect(() => {
+    // Get initial user
+    const getUser = async () => {
+      const { data: { user } } = await supabaseClient.auth.getUser()
+      setUser(user)
+    }
+    
+    getUser()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+      (event, session) => {
+        setUser(session?.user ?? null)
+      }
+    )
+
+    return () => subscription.unsubscribe()
+  }, [supabaseClient])
 
   useEffect(() => {
     if (user?.id) {
